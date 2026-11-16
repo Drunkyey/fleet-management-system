@@ -61,9 +61,9 @@
       </v-col>
     </v-row>
 
-    <!-- Rândul 2: Alerte și Informații Suplimentare -->
+    <!-- Rândul 2: Alerte și AI Fleet Assistant -->
     <v-row class="mt-4">
-      <!-- Panou Alerte Asigurări (Folosește Endpoint Complex 1) -->
+      <!-- Panou Alerte Asigurări (Coloana Stânga) -->
       <v-col cols="12" md="6">
         <v-card elevation="3" class="rounded-lg h-100 border-top-error">
           <v-card-title class="d-flex align-center pa-4 bg-grey-lighten-4">
@@ -96,17 +96,50 @@
         </v-card>
       </v-col>
 
-      <!-- Spațiu pentru viitoarea integrare AI (Ollama Chatbot) -->
+      <!-- Panou AI Fleet Assistant (Coloana Dreapta) -->
       <v-col cols="12" md="6">
-        <v-card elevation="3" class="rounded-lg h-100 border-top-primary bg-grey-lighten-5 d-flex flex-column align-center justify-center pa-6">
-          <v-icon size="80" color="primary" class="mb-4 opacity-50">mdi-robot-outline</v-icon>
-          <h3 class="text-h5 text-primary font-weight-bold text-center">AI Fleet Assistant</h3>
-          <p class="text-center text-grey-darken-1 mt-2">
-            Aici vom integra asistentul inteligent Ollama. Va putea analiza datele flotei și răspunde la întrebări în timp real.
-          </p>
-          <v-btn color="primary" variant="outlined" class="mt-4" disabled>
-            Integrare în curând
-          </v-btn>
+        <v-card elevation="3" class="rounded-lg h-100 border-top-primary d-flex flex-column">
+          <v-card-title class="d-flex align-center pa-4 bg-grey-lighten-4">
+            <v-icon color="primary" class="me-2">mdi-robot</v-icon>
+            <span class="text-primary font-weight-bold">AI Fleet Assistant (Ollama)</span>
+          </v-card-title>
+          <v-divider></v-divider>
+
+          <v-card-text class="d-flex flex-column justify-space-between flex-grow-1 pa-4">
+            <!-- Zona de afișare a răspunsului -->
+            <v-sheet
+              v-if="aiResponse"
+              color="grey-lighten-4"
+              class="pa-3 rounded mb-4"
+              style="white-space: pre-line; max-height: 220px; overflow-y: auto;"
+            >
+              {{ aiResponse }}
+            </v-sheet>
+            <div v-else class="text-grey-darken-1 text-body-2 mb-4">
+              Pune o întrebare despre starea flotei, șoferi, alocări active sau polițele de asigurare.
+            </div>
+
+            <!-- Câmpul de introducere a întrebării -->
+            <v-text-field
+              v-model="aiQuestion"
+              label="Întreabă ceva despre flotă..."
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              :disabled="isAiLoading"
+              @keyup.enter="askAi"
+            >
+              <template v-slot:append-inner>
+                <v-btn
+                  color="primary"
+                  icon="mdi-send"
+                  variant="text"
+                  :loading="isAiLoading"
+                  @click="askAi"
+                ></v-btn>
+              </template>
+            </v-text-field>
+          </v-card-text>
         </v-card>
       </v-col>
     </v-row>
@@ -126,13 +159,16 @@ export default {
       avgDriverExp: 0,
       activeCarsCount: 0,
       expiringInsurances: [],
-      stompClient: null // <--- Adaugă asta
+      stompClient: null,
+      aiQuestion: '',
+      aiResponse: '',
+      isAiLoading: false
     }
   },
   mounted() {
     this.fetchKPIs();
     this.fetchExpiringInsurances();
-    this.connectWebSocket(); // <--- Adaugă asta
+    this.connectWebSocket();
   },
   methods: {
     fetchKPIs() {
@@ -158,11 +194,11 @@ export default {
         .catch(err => console.error(err));
     },
     connectWebSocket() {
-      // Ne conectăm la endpoint-ul tău '/ws' din Spring Boot
+      // Ne conectăm la endpoint-ul '/ws' din Spring Boot
       const socket = new SockJS('http://localhost:8083/ws');
       this.stompClient = Stomp.over(socket);
       
-      // Oprim log-urile masive în consolă (opțional, dar recomandat)
+      // Oprim log-urile masive în consolă
       this.stompClient.debug = () => {};
 
       this.stompClient.connect({}, (frame) => {
@@ -171,13 +207,30 @@ export default {
         // Ne abonăm la canalul pe care trimite Controller-ul
         this.stompClient.subscribe('/topic/assignments', (message) => {
           console.log('S-a detectat o schimbare pe backend!', message.body);
-          
-          // Magia Real-Time: Reapelăm datele automat fără refresh!
           this.fetchKPIs();
         });
       }, (error) => {
         console.error('Eroare conexiune WebSocket:', error);
       });
+    },
+    async askAi() {
+      if (!this.aiQuestion.trim() || this.isAiLoading) return;
+
+      this.isAiLoading = true;
+      this.aiResponse = 'Analizez datele flotei...';
+
+      try {
+        const res = await axios.post('http://localhost:8083/api/ai/ask', {
+          question: this.aiQuestion
+        });
+        this.aiResponse = res.data.answer;
+        this.aiQuestion = '';
+      } catch (error) {
+        console.error('Eroare AI:', error);
+        this.aiResponse = 'Eroare la comunicarea cu serverul Spring Boot.';
+      } finally {
+        this.isAiLoading = false;
+      }
     }
   }
 }
@@ -200,7 +253,7 @@ export default {
   position: absolute;
   right: -10px;
   bottom: -15px;
-  opacity: 0.2; /* Iconiță mare și transparentă pe fundal */
+  opacity: 0.2;
   transform: rotate(-15deg);
 }
 
