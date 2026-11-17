@@ -1,3 +1,4 @@
+
 <template>
   <v-app>
     <!-- Meniul lateral curat, fără fundal albastru, aliniat perfect -->
